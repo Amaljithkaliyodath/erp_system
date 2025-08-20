@@ -4,11 +4,10 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
-      python manage.py migrate
+      python manage.py migrate --noinput
       python manage.py collectstatic --noinput
-  
-
-    startCommand: |
-      python manage.py migrate && \
-      echo "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('erpadmin', 'admin@example.com', 'yourpassword')" | python manage.py shell && \
-      gunicorn erp_system.wsgi:application
+      # Create superuser only if it doesn't exist
+      python manage.py shell -c "from django.contrib.auth import get_user_model; User=get_user_model(); \
+        User.objects.create_superuser('erpadmin','admin@example.com','yourpassword') \
+        if not User.objects.filter(username='erpadmin').exists() else None"
+    startCommand: gunicorn erp_system.wsgi:application
