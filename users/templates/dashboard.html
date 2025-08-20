@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ERP Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+</head>
+<body class="bg-light">
+<div class="container mt-4">
+  <h2 class="text-center mb-4">ERP Dashboard</h2>
+  <div id="content"></div>
+  <button class="btn btn-danger mt-3" onclick="logout()">
+    <i class="bi bi-box-arrow-right"></i> Logout
+  </button>
+</div>
+
+<!-- ================= Edit User Modal ================= -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Edit User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editUserForm">
+          <input type="hidden" id="editUserId">
+          <div class="mb-2">
+            <label>Username</label>
+            <input type="text" id="editUsername" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label>Email</label>
+            <input type="email" id="editEmail" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label>Role</label>
+            <select id="editRole" class="form-control">
+              <option value="Admin">Admin</option>
+              <option value="Manager">Manager</option>
+              <option value="Employee">Employee</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 mt-2">
+            <i class="bi bi-save"></i> Save Changes
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let currentUsers = [];
+
+async function loadDashboard() {
+  const role = localStorage.getItem("role");
+  const token = localStorage.getItem("access");
+
+  if (!role || !token) {
+    window.location.href = "/";
+    return;
+  }
+
+  let content = "";
+
+  // ---------------------- ADMIN PANEL ------------------------
+  if (role === "Admin") {
+    content = `
+      <h4 class="mb-3"><i class="bi bi-shield-lock"></i> Admin Panel</h4>
+      <p>Manage users: Add / Edit / Delete</p>
+
+      <!-- Add User Form -->
+      <div class="card p-3 mb-4 shadow-sm">
+        <h5><i class="bi bi-person-plus-fill"></i> Add New User</h5>
+        <form id="addUserForm">
+          <div class="mb-2">
+            <label>Username</label>
+            <input type="text" id="newUsername" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label>Email</label>
+            <input type="email" id="newEmail" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label>Role</label>
+            <select id="newRole" class="form-control">
+              <option value="Admin">Admin</option>
+              <option value="Manager">Manager</option>
+              <option value="Employee" selected>Employee</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label>Password</label>
+            <input type="password" id="newPassword" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-success mt-2">
+            <i class="bi bi-check-circle"></i> Add User
+          </button>
+        </form>
+      </div>
+
+      <!-- User List -->
+      <h5><i class="bi bi-people-fill"></i> User List</h5>
+      <table class="table table-hover shadow-sm">
+        <thead class="table-dark">
+          <tr><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="userTable"></tbody>
+      </table>
+    `;
+
+    document.getElementById("content").innerHTML = content;
+    loadUsers();
+
+    // Add User Submit
+    document.getElementById("addUserForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const data = {
+        username: document.getElementById("newUsername").value,
+        email: document.getElementById("newEmail").value,
+        role: document.getElementById("newRole").value,
+        password: document.getElementById("newPassword").value,
+        password2: document.getElementById("newPassword").value
+      };
+      const res = await fetch("/api/register/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        alert("✅ User added successfully!");
+        location.reload();
+      } else {
+        const err = await res.json();
+        alert("❌ Failed to add user: " + JSON.stringify(err));
+      }
+    });
+  }
+  // ---------------------- MANAGER PANEL ------------------------
+  else if (role === "Manager") {
+    content = "<h4><i class='bi bi-briefcase-fill'></i> Manager Panel</h4><p>Can view employees</p>";
+    const res = await fetch("/api/users/", {headers: {Authorization: "Bearer " + token}});
+    const users = await res.json();
+    content += "<ul class='list-group'>";
+    users.forEach(u => content += `<li class="list-group-item">${u.username} - ${u.role}</li>`);
+    content += "</ul>";
+    document.getElementById("content").innerHTML = content;
+  }
+  // ---------------------- EMPLOYEE PANEL ------------------------
+  else {
+    content = "<h4><i class='bi bi-person-badge'></i> Employee Panel</h4><p>Profile Details</p>";
+    const res = await fetch("/api/profile/", {headers: {Authorization: "Bearer " + token}});
+    const profile = await res.json();
+    content += `
+      <div class="card p-3 shadow-sm">
+        <p><strong>Username:</strong> ${profile.username}</p>
+        <p><strong>Email:</strong> ${profile.email}</p>
+        <p><strong>Role:</strong> ${profile.role}</p>
+      </div>
+    `;
+    document.getElementById("content").innerHTML = content;
+  }
+}
+
+// Load all users for admin
+async function loadUsers() {
+  const token = localStorage.getItem("access");
+  const res = await fetch("/api/users/", { headers: { Authorization: "Bearer " + token } });
+  currentUsers = await res.json();
+
+  let rows = "";
+  currentUsers.forEach(u => {
+    rows += `
+      <tr>
+        <td>${u.username}</td>
+        <td>${u.email}</td>
+        <td>${u.role}</td>
+        <td>
+          <button class="btn btn-outline-primary btn-sm" onclick="openEditModal(${u.id})">
+            <i class="bi bi-pencil"></i> Edit
+          </button>
+          <button class="btn btn-outline-danger btn-sm" onclick="deleteUser(${u.id})">
+            <i class="bi bi-trash"></i> Delete
+          </button>
+        </td>
+      </tr>`;
+  });
+  document.getElementById("userTable").innerHTML = rows;
+}
+
+// Open edit modal
+function openEditModal(id) {
+  const user = currentUsers.find(u => u.id === id);
+  if (!user) return;
+
+  document.getElementById("editUserId").value = user.id;
+  document.getElementById("editUsername").value = user.username;
+  document.getElementById("editEmail").value = user.email;
+  document.getElementById("editRole").value = user.role;
+
+  const modal = new bootstrap.Modal(document.getElementById("editUserModal"));
+  modal.show();
+}
+
+// Save edited user
+document.getElementById("editUserForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const token = localStorage.getItem("access");
+  const id = document.getElementById("editUserId").value;
+
+  const data = {
+    username: document.getElementById("editUsername").value,
+    email: document.getElementById("editEmail").value,
+    role: document.getElementById("editRole").value,
+  };
+
+  const res = await fetch(`/api/users/${id}/`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify(data)
+  });
+
+  if (res.ok) {
+    alert("✅ User updated successfully!");
+    bootstrap.Modal.getInstance(document.getElementById("editUserModal")).hide();
+    loadUsers();
+  } else {
+    const err = await res.json();
+    alert("❌ Failed to update: " + JSON.stringify(err));
+  }
+});
+
+// Delete user
+async function deleteUser(id) {
+  const token = localStorage.getItem("access");
+  if (!confirm("Are you sure you want to delete this user?")) return;
+  const res = await fetch(`/api/users/${id}/`, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + token }
+  });
+  if (res.ok) {
+    alert("🗑️ User deleted!");
+    loadUsers();
+  } else {
+    alert("❌ Failed to delete user.");
+  }
+}
+
+function logout() {
+  localStorage.clear();
+  window.location.href = "/";
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
